@@ -74,7 +74,7 @@ class PendulumPlant:
 
         return self.t_values, self.x_values, self.tau_values
 
-    def simulate_and_animate(self, t0, x0, tf, dt, controller=None, integrator="euler", save_video=False):
+    def simulate_and_animate(self, t0, x0, tf, dt, controller=None, integrator="euler", save_video=False, anim_dt = 0.02):
         """
         simulate and animate the pendulum
         """
@@ -84,6 +84,15 @@ class PendulumPlant:
         self.x_values = []
         self.tau_values = []
 
+        num_steps = int(tf / anim_dt)
+        par_dict = {}
+        par_dict["dt"] = dt
+        par_dict["anim_dt"] = anim_dt
+        par_dict["controller"] = controller
+        par_dict["integrator"] = integrator
+        frames = num_steps * [par_dict]
+        self.loopsize = int(anim_dt/dt)
+        
         #fig = plt.figure(figsize=(6,6))
         #self.animation_ax = plt.axes()
         fig, (self.animation_ax, self.ps_ax) = plt.subplots(1, 2, figsize=(10, 5))
@@ -94,12 +103,12 @@ class PendulumPlant:
         self.animation_plots.append(ee_plot)
         self.animation_plots.append(bar_plot)
 
-        num_steps = int(tf / dt)
+        """num_steps = int(tf / dt)
         par_dict = {}
         par_dict["dt"] = dt
         par_dict["controller"] = controller
         par_dict["integrator"] = integrator
-        frames = num_steps*[par_dict]
+        frames = num_steps*[par_dict]"""
         
         #ps_fig = plt.figure(figsize=(6,6))
         #self.ps_ax = plt.axes()
@@ -108,7 +117,7 @@ class PendulumPlant:
         #self.ps_plots.append(ps_plot)
         self.animation_plots.append(ps_plot)
 
-        animation = FuncAnimation(fig, self._animation_step, frames=frames, init_func=self._animation_init, blit=True, repeat=False, interval=dt*1000)
+        animation = FuncAnimation(fig, self._animation_step, frames=frames, init_func=self._animation_init, blit=True, repeat=False, interval=anim_dt*1000)
         animation2 = None
         #if phase_plot:
         #    animation2 = FuncAnimation(fig, self._ps_update, init_func=self._ps_init, blit=True, repeat=False, interval=dt*1000)
@@ -133,11 +142,43 @@ class PendulumPlant:
         self.animation_ax.set_ylim(-1.5*self.l, 1.5*self.l)
         self.animation_ax.set_xlabel("x position [m]")
         self.animation_ax.set_ylabel("y position [m]")
+        self.current_frame = 0
         for ap in self.animation_plots:
             ap.set_data([], [])
 
         self._ps_init()
         return self.animation_plots
+
+    '''def _animation_step(self, par_dict):
+        """
+        simulation of a single step which also updates the animation plot
+        """
+        dt = par_dict["dt"]
+        controller = par_dict["controller"]
+        integrator = par_dict["integrator"]
+        anim_dt = par_dict["anim_dt"]
+        sim_steps = int(anim_dt / dt)
+        """
+        if controller is not None:
+            tau = controller.get_control_output(self.x)
+        else:
+            tau = 0
+        self.step(tau, dt, integrator=integrator)
+        """
+        for _ in range(sim_steps):
+            if controller is not None:
+                t0 = time.time()
+                tau = controller.get_control_output(x=self.x, t=self.t)
+            else:
+                tau = np.zeros(self.dof)
+            self.step(tau, dt, integrator=integrator)
+        ee_pos = self.forward_kinematics(self.x[0])
+        self.animation_plots[0].set_data((ee_pos[0],), (ee_pos[1],))
+        self.animation_plots[1].set_data([0, ee_pos[0]], [0, ee_pos[1]])
+
+        self._ps_update(0)
+
+        return self.animation_plots'''
 
     def _animation_step(self, par_dict):
         """
@@ -146,11 +187,14 @@ class PendulumPlant:
         dt = par_dict["dt"]
         controller = par_dict["controller"]
         integrator = par_dict["integrator"]
-        if controller is not None:
-            tau = controller.get_control_output(self.x)
-        else:
-            tau = 0
-        self.step(tau, dt, integrator=integrator)
+        
+        for _ in range(self.loopsize):
+            if controller is not None:
+                tau = controller.get_control_output(self.x)
+            else:
+                tau = 0
+            self.step(tau, dt, integrator=integrator)
+        
         ee_pos = self.forward_kinematics(self.x[0])
         self.animation_plots[0].set_data((ee_pos[0],), (ee_pos[1],))
         self.animation_plots[1].set_data([0, ee_pos[0]], [0, ee_pos[1]])
